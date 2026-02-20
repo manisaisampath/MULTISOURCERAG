@@ -1,0 +1,14 @@
+streamlit
+langchain
+langchain-community
+langchain-chroma
+langchain-huggingface
+langchain-groq
+chromadb
+sentence-transformers
+transformers
+huggingface-hub
+unstructured
+beautifulsoup4
+python-dotenv
+tiktoken
