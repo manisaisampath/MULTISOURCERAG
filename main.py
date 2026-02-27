@@ -3,13 +3,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
 from uuid import uuid4
 from pathlib import Path
 from dotenv import load_dotenv
-
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
@@ -42,52 +41,61 @@ def database():
 
 def processurl(urls):
     global vectorstore
-    print("Initializing database and vectorstore...")
-    database()
-    print("Resetting vectorstore...")
-    vectorstore.delete_collection()
-    vectorstore = None
-    database()
 
+    print("Initializing database...")
+    database()
 
     print("Loading documents from URLs...")
+
     loader = UnstructuredURLLoader(
         urls=urls,
         headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            "User-Agent": "Mozilla/5.0"
         }
     )
 
-    doc = loader.load()
+    docs = loader.load()
+    print("Documents loaded:", len(docs))
+
+    if not docs:
+        raise ValueError("No documents loaded from URLs.")
 
     print("Splitting documents...")
-    chunk = RecursiveCharacterTextSplitter(
+
+    splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ".", " "],
         chunk_size=1000,
         chunk_overlap=200
     )
- 
-    data = chunk.split_documents(doc)
 
-    ("Adding documents to vectorstore...")
-    uuids = [str(uuid4()) for _ in range(len(data))]
-    vectorstore.add_documents(data, ids=uuids)
+    chunks = splitter.split_documents(docs)
+    print("Chunks created:", len(chunks))
 
+    if not chunks:
+        raise ValueError("No chunks created from documents.")
+
+    print("Adding documents to vectorstore...")
+
+    uuids = [str(uuid4()) for _ in range(len(chunks))]
+    vectorstore.add_documents(chunks, ids=uuids)
+
+    print("Documents successfully added.")
 
 
 def generate(query):
-    if not vectorstore:
-        raise Exception("Vectorstore not initialized.")
+    global vectorstore
+
+    if vectorstore is None:
+        raise Exception("Vectorstore not initialized. Please process URLs first.")
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-    # Step 1: Retrieve relevant documents
     docs = retriever.invoke(query)
 
-    # Step 2: Combine document contents
-    context = "\n\n".join([doc.page_content for doc in docs])
+    if not docs:
+        return "No relevant information found.", []
 
-    # Step 3: Extract unique source URLs
+    context = "\n\n".join([doc.page_content for doc in docs])
     sources = list(set([doc.metadata.get("source", "Unknown") for doc in docs]))
 
     prompt = ChatPromptTemplate.from_template(
@@ -110,27 +118,3 @@ def generate(query):
     })
 
     return answer, sources
-
-
-if __name__ == "__main__":
-
-    urls = [
-        "https://www.cnbc.com/2024/12/21/how-the-federal-reserves-rate-policy-affects-mortgages.html",
-        "https://www.cnbc.com/2024/12/20/why-mortgage-rates-jumped-despite-fed-interest-rate-cut.html",
-        "https://www.investopedia.com/terms/r/realestate.asp"
-    ]
-
-
-    processurl(urls)
-
-    answer, sources = generate(
-    "how many times FED lowered the interest rate in 2024"
-)
-
-    print("\nAnswer:\n")
-    print(answer)
-
-    print("\nSources:\n")
-    for src in sources:
-        print(src)
-
