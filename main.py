@@ -1,4 +1,4 @@
-from langchain_community.document_loaders import UnstructuredURLLoader
+from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -47,10 +47,12 @@ def processurl(urls):
 
     print("Loading documents from URLs...")
 
-    loader = UnstructuredURLLoader(
-        urls=urls,
-        headers={
-            "User-Agent": "Mozilla/5.0"
+    loader = WebBaseLoader(
+        urls,
+        requests_kwargs={
+            "headers": {
+                "User-Agent": "Mozilla/5.0"
+            }
         }
     )
 
@@ -79,7 +81,7 @@ def processurl(urls):
     uuids = [str(uuid4()) for _ in range(len(chunks))]
     vectorstore.add_documents(chunks, ids=uuids)
 
-    print("Documents successfully added.")
+    print("Documents successfully added to vectorstore.")
 
 
 def generate(query):
